@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (C) 2017-2020 German Aerospace Center (DLR).
+ * Copyright (C) 2017-2023 German Aerospace Center (DLR).
  * Eclipse ADORe, Automated Driving Open Research https://eclipse.org/adore
  *
  * This program and the accompanying materials are made available under the
@@ -10,6 +10,7 @@
  *
  * Contributors:
  *   Daniel Heß - initial API and implementation
+ *   Matthias Nichting
  ********************************************************************************/
 #pragma once
 #include <string>
@@ -73,6 +74,7 @@ namespace adore
             static const int COLLISION_MITIGATION = 0;                  /**< */
             static const int EMERGENCY_BREAKING = 1;                    /**< */
             static const int NOMINAL_DRIVING = 2;                       /**< */
+            static const int UNSTRUCTURED = 3;                         /**< */
             bool indicator_left;
             bool indicator_right;
             PlanningResult()

@@ -243,8 +243,8 @@ namespace adore
 
                     if(result.iteration != iteration_)
                     { 
-                        result.status_string = "wrong iteration; "+result.status_string;
-                        valid = false;
+                        result.status_string = "wrong iteration " + std::to_string(iteration_ - result.iteration) + "; "+result.status_string;
+                        //valid = false;
                     }
                     if(!result.combined_maneuver_valid)
                     {
