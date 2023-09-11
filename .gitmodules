@@ -61,3 +61,7 @@ shallow = true
 	url = git@github.com:DLR-TS/ci_teststand.git
     ignore = untracked
     shallow = true
+[submodule "sqp"]
+	path = sqp
+	url = git@gitlab.dlr.de:csa/sqp.git
+	branch = Develop_Reza

@@ -34,6 +34,7 @@ set_env:
 build: clean set_env ## Build libadore
 	rm -rf "${PROJECT}/build"
 	make build_external
+	make build_sqp
 	#docker compose build libadore_build
 
     #buildx bake required for builds behind proxy
@@ -74,6 +75,10 @@ test: set_env ## run libadore unit tests
 .PHONY: build_external 
 build_external: ## builds all libadore external libraries 
 	cd "${ROOT_DIR}/libadore/external/" && make
+
+.PHONY: build_sqp 
+build_sqp: ## builds all libadore external libraries 
+	cd "${ROOT_DIR}/sqp/" && make
 
 .PHONY: clean_external 
 clean_external: ## clean all libadore external libraries
