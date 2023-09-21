@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (C) 2017-2020 German Aerospace Center (DLR). 
+ * Copyright (C) 2017-2023 German Aerospace Center (DLR). 
  * Eclipse ADORe, Automated Driving Open Research https://eclipse.org/adore
  *
  * This program and the accompanying materials are made available under the 
@@ -18,6 +18,10 @@
 #include <adore/fun/tac/anominalplanner.h>
 #include <adore/params/ap_longitudinal_planner.h>
 #include <adore/params/ap_lateral_planner.h>
+#include <adore/params/ap_trajectory_generation.h>
+#include <adore/params/ap_tactical_planner.h>
+#include <adore/params/ap_vehicle.h>
+#include <adore/params/afactory.h>
 #include <adore/mad/adoremath.h>
 #include <adore/view/agap.h>
 
@@ -33,6 +37,260 @@ namespace fun
       postTransition,
       undefined
     };
+
+    class LongitudinalProgressConstraintLC:public ANominalConstraint
+    {
+      private:
+        adore::view::ALaneChangeView *lcv_;
+        adore::params::APVehicle* pveh_;
+        adore::params::APLateralPlanner* plat_;
+        adore::params::APTrajectoryGeneration* pgen_;
+        adore::params::APTacticalPlanner* ptac_;
+        double width_;
+        double hard_safety_distance_;
+        double soft_safety_distance_;
+        double min_control_space_;
+        ConstraintDirection direction_;
+        adore::view::AGap* gap_;
+        double to_front_,to_rear_;
+        double t0_;
+      public:
+        LongitudinalProgressConstraintLC(adore::view::ALaneChangeView* lcv,
+                                   adore::params::APVehicle* pv,
+                                   adore::params::APTrajectoryGeneration* ptrajectory,
+                                   adore::params::APTacticalPlanner* ptac,
+                                   ConstraintDirection direction)
+          :lcv_(lcv),pveh_(pv),pgen_(ptrajectory),ptac_(ptac),gap_(nullptr),direction_(direction){}
+
+        void setGap(adore::view::AGap* gap){gap_=gap;}
+
+        virtual double getValue(double t,double s,double ds)const override
+        {
+          double front_gap = std::max(ds * ptac_->getFrontTimeGap(),ptac_->getFrontSGap());
+
+          if(gap_==nullptr)
+          {
+            return direction_==UB?1e5:-1e5;
+          }
+          auto state = gap_->getState(s,t);
+            //if( s-to_rear_ < lcv_->getProgressOfGateOpen()) state = adore::view::AGap::OPENING;
+            //if( s+to_front_ > lcv_->getProgressOfGateClosed()) state = adore::view::AGap::CLOSED;
+            switch( state )
+            {
+              case adore::view::AGap::OPENING:
+              {
+                return direction_==UB?gap_->getLeadProgress(t,s+1000)-to_front_-front_gap:-1000;//gap_->getChaseProgress(t,s-1000)+to_rear_;
+              }
+              break;
+              case adore::view::AGap::OPEN:
+              {
+                if(direction_ == UB)
+                return gap_->getLeadProgress(t,s+1000)-to_front_-front_gap;
+                return gap_->getChaseProgress(t,s-1000)+to_rear_;
+                double chase_old = gap_->getChaseProgress(std::max(t0_,t-1),s-1000);
+                double chase_current = gap_->getChaseProgress(t,s-1000);
+                return chase_current;
+                return chase_old + (chase_current-chase_old) * 0.9 + to_rear_;
+              }
+
+              break;
+              case adore::view::AGap::CLOSED:
+              {
+
+                if(direction_ == UB)
+                return gap_->getLeadProgress(t,s+1000)-to_front_-front_gap;
+                return gap_->getChaseProgress(t,s-1000)+to_rear_;
+                double chase_old = gap_->getChaseProgress(std::max(t0_,t-1),s-1000);
+                double chase_current = gap_->getChaseProgress(t,s-1000);
+                return chase_old + (chase_current-chase_old) * 0.9 + to_rear_;
+              }
+              break;
+            }
+             return direction_==UB?1e5:-1e5;
+        }
+        virtual void update(double t0,double s0,double ds0) override
+        {         
+
+          to_rear_ = pveh_->get_d() + pgen_->get_rho();
+          to_front_ = pveh_->get_a() + pveh_->get_b() + pveh_->get_c() - pgen_->get_rho();
+          t0_=t0;
+                    //for lane change: operate only with hard safety distance
+          // soft_safety_distance_ = hard_safety_distance_;
+        }
+        virtual ConstraintDirection getDirection() override
+        {
+          return direction_;
+        }
+        virtual int getDimension() override
+        {
+          return 0;
+        }
+        virtual int getDerivative() override
+        {
+          return 0;
+        }
+    };
+
+
+    class LateralOffsetConstraintLC_second:public ANominalConstraint
+    {
+      private:
+        adore::view::ALaneChangeView *lcv_;
+        adore::params::APVehicle* pveh_;
+        adore::params::APLateralPlanner* plat_;
+        adore::params::APTrajectoryGeneration* pgen_;
+        double width_;
+        double to_front_,to_rear_;
+        double hard_safety_distance_;
+        double soft_safety_distance_;
+        double min_control_space_;
+        ANominalConstraint::ConstraintDirection direction_;
+        adore::view::AGap* gap_;
+      public:
+      LateralOffsetConstraintLC_second( adore::view::ALaneChangeView* lcv,
+                                   adore::params::APVehicle* pv,
+                                   adore::params::APLateralPlanner* plat,
+                                   adore::params::APTrajectoryGeneration* pgen,
+                                   ANominalConstraint::ConstraintDirection direction)
+          :lcv_(lcv),pveh_(pv),plat_(plat),pgen_(pgen),direction_(direction),gap_(nullptr){}
+
+        void setGap(adore::view::AGap* gap){gap_=gap;}
+
+        virtual double getValue(double t,double s,double ds)const override
+        {
+          double dl,dr,dc,d;
+          if(!lcv_->getSourceLane()->isValid())return 0;
+          if(gap_==nullptr ||!lcv_->getTargetLane()->isValid())
+          {
+            dl = lcv_->getSourceLane()->getOffsetOfLeftBorder(s);
+            dr = lcv_->getSourceLane()->getOffsetOfRightBorder(s);
+          }
+          else
+          {
+            auto state = gap_->getState(s,t);
+            //if( s-to_rear_ < lcv_->getProgressOfGateOpen()) state = adore::view::AGap::OPENING;
+            //if( s+to_front_ > lcv_->getProgressOfGateClosed()) state = adore::view::AGap::CLOSED;
+            switch( state )
+            {
+              case adore::view::AGap::OPENING:
+              {
+                if(lcv_->getLCDirection()==adore::view::ALaneChangeView::LEFT)
+                {
+                  dl = lcv_->getOffsetOfSeparatingBorder(s);
+                  dr = lcv_->getOffsetOfStartOuterBorder(s);
+                }
+                else
+                {
+                  dl = lcv_->getOffsetOfStartOuterBorder(s);                  
+                  dr = lcv_->getOffsetOfSeparatingBorder(s);
+                }
+              }
+              break;
+              case adore::view::AGap::OPEN:
+              {
+                if(lcv_->getLCDirection()==adore::view::ALaneChangeView::LEFT)
+                {
+                  dl = lcv_->getOffsetOfDestinationOuterBorder(s);
+                  dr = lcv_->getOffsetOfStartOuterBorder(s);
+                }
+                else
+                {
+                  dl = lcv_->getOffsetOfStartOuterBorder(s);
+                  dr = lcv_->getOffsetOfDestinationOuterBorder(s);                  
+                }
+              }
+              break;
+              case adore::view::AGap::CLOSED:
+              {
+                dl = lcv_->getTargetLane()->getOffsetOfLeftBorder(s);
+                dr = lcv_->getTargetLane()->getOffsetOfRightBorder(s);
+              }
+              break;
+            }
+          }
+          if (direction_==LB)
+          {
+            return dr+0.5*width_;
+          }
+          else
+          {
+            return dl-0.5*width_;
+          }
+
+
+
+          dc = (dl+dr)*0.5;//center
+          d = dl-dr;
+          //TODO: this part has been inserted for debugging
+          {
+            if(direction_==LB)
+            {
+              return dr + hard_safety_distance_ + width_*0.5;
+            }
+            else
+            {
+              return dl - hard_safety_distance_ - width_*0.5;
+            }
+          }
+
+
+          //not enough room to enforce hard safety distance->singular solution
+          if(d < 2.0*hard_safety_distance_ + width_)
+          {
+            return dc;
+          }
+          //not enough room to enforce min_control_space and hard_safety_distance -> enforce hard_safety_distance
+          else if(d < 2.0*soft_safety_distance_ + width_ + min_control_space_)
+          {
+            if(direction_==LB)
+            {
+              return dr + hard_safety_distance_ + width_*0.5;
+            }
+            else
+            {
+              return dl - hard_safety_distance_ - width_*0.5;
+            }
+          }
+          //enough room to enforce soft_safety_distance and min_control_space
+          else
+          {
+            if(direction_==LB)
+            {
+              return dr + soft_safety_distance_ + width_*0.5;
+            }
+            else
+            {
+              return dl - soft_safety_distance_ - width_*0.5;
+            }            
+          }
+        }
+        virtual void update(double t0,double s0,double ds0) override
+        {
+          width_ = pveh_->get_bodyWidth();
+          hard_safety_distance_ = plat_->getHardSafetyDistanceToLaneBoundary();
+          soft_safety_distance_ = plat_->getSoftSafetyDistanceToLaneBoundary();
+          min_control_space_ = plat_->getMinimumLateralControlSpace();         
+
+          to_rear_ = pveh_->get_d() + pgen_->get_rho();
+          to_front_ = pveh_->get_a() + pveh_->get_b() + pveh_->get_c() - pgen_->get_rho(); 
+
+          //for lane change: operate only with hard safety distance
+          // soft_safety_distance_ = hard_safety_distance_;
+        }
+        virtual ConstraintDirection getDirection() override
+        {
+          return direction_;
+        }
+        virtual int getDimension() override
+        {
+          return 1;
+        }
+        virtual int getDerivative() override
+        {
+          return 0;
+        }
+    };
+
     /**
      *  LateralOffsetConstraintLC - provides the left=UB or right=LB bound for lateral planning wrt the lane change view.
      */
@@ -46,13 +304,13 @@ namespace fun
         double hard_safety_distance_;
         double soft_safety_distance_;
         double min_control_space_;
-        ConstraintDirection direction_;
+        ANominalConstraint::ConstraintDirection direction_;
         adore::view::AGap* gap_;
       public:
         LateralOffsetConstraintLC(adore::view::ALaneChangeView* lcv,
                                   adore::params::APVehicle* pv,
                                   adore::params::APLateralPlanner* plat,
-                                  ConstraintDirection direction)
+                                  ANominalConstraint::ConstraintDirection direction)
           :lcv_(lcv),pv_(pv),plat_(plat),direction_(direction),gap_(nullptr){}
 
         void setGap(adore::view::AGap* gap){gap_=gap;}
@@ -180,6 +438,87 @@ namespace fun
     };
 
 
+
+    /**
+     *  LaneChangeIntoGapReference - use this reference for lateral profile of lane changes
+     */
+    class LaneChangeIntoGapReference_second:public ANominalReference
+    {
+      private:
+        adore::view::ALaneChangeView* lcv_;
+        adore::params::APVehicle* pv_;
+        adore::params::APTrajectoryGeneration* pgen_;
+        adore::params::APLateralPlanner* plat_;
+        adore::view::AGap* gap_;
+        double width_;
+        double hard_safety_distance_;
+        double soft_safety_distance_;
+        double min_control_space_;
+        double d_;///lateral grid scale 
+        double i_grid_;//grid step index
+        double to_rear_,to_front_;
+      public:
+        LaneChangeIntoGapReference_second(adore::view::ALaneChangeView* lcv,adore::params::APVehicle* pv,adore::params::APLateralPlanner* plat,adore::params::APTrajectoryGeneration* pgen,double i_grid = 0.0)
+          :lcv_(lcv),pv_(pv),plat_(plat),pgen_(pgen),i_grid_(i_grid),gap_(nullptr){d_ = 0.2;}
+        void setGap(adore::view::AGap* gap){gap_=gap;}
+
+        virtual bool getValueIfAvailable(double t, double s, double ds,double & ref)const override
+        {
+          ref = 0.0;
+
+
+            if(gap_==nullptr || !lcv_->getTargetLane()->isValid())
+          {
+            return false;
+          }
+          auto state = gap_->getState(s-to_rear_,t);
+            if( s-to_rear_ < lcv_->getProgressOfGateOpen()) state = adore::view::AGap::OPENING;
+            if( s+to_front_ > lcv_->getProgressOfGateClosed()) state = adore::view::AGap::CLOSED;
+            switch( state )
+            {
+              case adore::view::AGap::OPENING:
+              {
+                ref = 0.5*lcv_->getOffsetOfSeparatingBorder(s) + 0.5*lcv_->getOffsetOfStartOuterBorder(s);
+                return true;
+              }
+              break;
+              case adore::view::AGap::OPEN:
+              {
+                ref = 0.5*lcv_->getOffsetOfSeparatingBorder(s) + 0.5*lcv_->getOffsetOfDestinationOuterBorder(s);
+                return true;
+              }
+              break;
+              case adore::view::AGap::CLOSED:
+              {
+                ref = 0.5*lcv_->getOffsetOfSeparatingBorder(s) + 0.5*lcv_->getOffsetOfDestinationOuterBorder(s);
+                return true;
+              }
+              break;
+            }
+             return false;
+        }
+
+
+
+        virtual void update(double t0,double s0,double ds0)override
+        {
+          to_rear_ = pv_->get_d() + pgen_->get_rho();
+          to_front_ = pv_->get_a() + pv_->get_b() + pv_->get_c() - pgen_->get_rho();
+          width_ = pv_->get_bodyWidth();
+          hard_safety_distance_ = plat_->getHardSafetyDistanceToLaneBoundary();
+          soft_safety_distance_ = plat_->getSoftSafetyDistanceToLaneBoundary();
+          min_control_space_ = plat_->getMinimumLateralControlSpace(); 
+          d_ = plat_->getLateralGridScale();
+        }
+        virtual int getDimension() override
+        {
+          return 1;
+        }
+        virtual int getDerivative() override
+        {
+          return 0;
+        }
+    };
     /**
      *  LaneChangePhaseEstimator - provides estimation for current LaneChangePhase
      * to do: re-arrange code structure. this is no ANominalReference
