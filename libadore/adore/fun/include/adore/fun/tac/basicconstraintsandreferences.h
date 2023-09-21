@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (C) 2017-2020 German Aerospace Center (DLR). 
+ * Copyright (C) 2017-2023 German Aerospace Center (DLR). 
  * Eclipse ADORe, Automated Driving Open Research https://eclipse.org/adore
  *
  * This program and the accompanying materials are made available under the 
@@ -10,6 +10,7 @@
  *
  * Contributors: 
  *   Daniel Heß - initial API and implementation
+ *   Matthias Nichting
  ********************************************************************************/
 
 #pragma once
@@ -1223,6 +1224,72 @@ namespace adore
           return 0;
         }
     };
+    /**
+     * A constraint, which upper bounds the position of the ego vehicle according to a position that can be set arbitrarily
+     */
+    class StopAtPosition:public ANominalConstraint
+    {
+      private:
+        bool active_;
+        double smax_;
+        double x_,y_;
+        double s_if_inactive_;
+        adore::view::ALane* lane_;
+        adore::params::APVehicle* pvehicle_;
+        adore::params::APTrajectoryGeneration* ptrajectorygeneration_;
+      public:
+        StopAtPosition(adore::view::ALane* lane)
+                      :active_(false),
+                      x_(0.0),
+                      y_(0.0),
+                      s_if_inactive_(1000.0),
+                      smax_(0.0),
+                      lane_(lane)
+        {
+          pvehicle_ = adore::params::ParamsFactoryInstance::get()->getVehicle();
+          ptrajectorygeneration_ = adore::params::ParamsFactoryInstance::get()->getTrajectoryGeneration();
+        }
+        virtual double getValue(double t,double s,double ds)const override
+        {
+          return active_?smax_:s_if_inactive_;
+        }
+        virtual void setActiveness(bool val)
+        {
+          active_ = val;
+        }
+        virtual void setPosition(double x, double y)
+        {
+          x_ = x;
+          y_ = y;
+        }
+        virtual void update(double t0,double s0,double ds0) override 
+        {
+          if(!active_ || !lane_->isValid())
+          {
+            return;
+          }
 
+          double to_front = pvehicle_->get_a() + pvehicle_->get_b() + pvehicle_->get_c() - ptrajectorygeneration_->get_rho();
+          double n;
+          lane_->toRelativeCoordinates(x_, y_, smax_, n);
+          smax_ = smax_ - to_front;
+          if (n > lane_->getOffsetOfLeftBorder(smax_) || n < lane_->getOffsetOfRightBorder(smax_))
+          {
+            smax_ = s_if_inactive_;
+          }
+        }
+        virtual ConstraintDirection getDirection() override
+        {
+          return UB;
+        }
+        virtual int getDimension() override
+        {
+          return 0;
+        }
+        virtual int getDerivative() override
+        {
+          return 0;
+        }
+    };
   }
 }
