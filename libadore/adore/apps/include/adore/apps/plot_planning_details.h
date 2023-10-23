@@ -42,9 +42,10 @@ namespace adore
             DLR_TS::PlotLab::AFigureStub* figure_lat1_;
             DLR_TS::PlotLab::AFigureStub* figure_lat2_;
             adore::mad::AFeed<adore::fun::PlanningResult>* planning_result_feed_;
+            bool plot_only_selected_plan_;
 
           public:
-            PlanningDetailsPlotter(std::string filter = "")
+            PlanningDetailsPlotter(std::string filter = "", bool plot_only_selected_plan = true)
               : plot_longitudinal_(true)
               , plot_lateral_(true)
               , s_upper_bound_clipped_(200)
@@ -52,8 +53,9 @@ namespace adore
               , n_upper_bound_clipped_(5)
               , n_lower_bound_clipped_(-5)
               , filter_(filter)
+              , plot_only_selected_plan_(plot_only_selected_plan)
             {
-                planning_result_feed_ = adore::fun::FunFactoryInstance::get()->getPlanningResultFeed();
+                planning_result_feed_ = plot_only_selected_plan_ ? adore::fun::FunFactoryInstance::get()->getPlanningSelectFeed():adore::fun::FunFactoryInstance::get()->getPlanningResultFeed();
                 initialize_plot();
             }
             ~PlanningDetailsPlotter()
@@ -108,7 +110,7 @@ namespace adore
                 const int N = longitudinal_plan.nc();
                 double XN[N];
                 double YN[N];
-                const std::string& name= planning_result.name;
+                const std::string& name = plot_only_selected_plan_ ? "plan_sel" : planning_result.name;
                 adore::mad::copyRowToArray(longitudinal_plan, XN, 0);  // t
                 adore::mad::copyRowToArray(longitudinal_plan, YN, 1);  // s
                 figure_lon1_->plot(name+"/s", XN, YN, N, "LineColor=0,0,1");
@@ -161,7 +163,7 @@ namespace adore
                 const int N = lateral_plan.nc();
                 double XN[N];
                 double YN[N];
-                const std::string& name= planning_result.name;
+                const std::string& name = plot_only_selected_plan_ ? "plan_sel" : planning_result.name;
                 adore::mad::copyRowToArray(lateral_plan, XN, 0);  // t
                 adore::mad::copyRowToArray(lateral_plan, YN, 1);  // s
                 figure_lat1_->plot(name+"/n", XN, YN, N, "LineColor=0,0,1");
