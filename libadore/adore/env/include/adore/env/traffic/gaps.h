@@ -181,7 +181,7 @@ namespace adore
                 return guard;
             }
 
-            unsigned int getChaseID()
+            int getChaseID()
             {
                 return chase_exists_ ? chase_id_ : -1;
             }
@@ -241,6 +241,160 @@ namespace adore
 
           amin_ = ptac_->getAssumedNominalAccelerationMinimum();
           front_s_buffer_ = ptac_->getFrontSGap();
+                updateLead();
+                updateChase();
+            }
+        };
+        class StdEgoProgressGap : public adore::view::AGap
+        {
+            adore::view::ALane* target_;
+            adore::view::ALane* source_;
+            bool chase_exists_;
+            int chase_id_;
+            double chase_t0_;
+            double chase_v0_;
+            double chase_s0_;
+            bool lead_exists_;
+            int lead_id_;
+            double lead_t0_;
+            double lead_v0_;
+            double lead_s0_,lead_a0_,chase_a0_;
+            bool end_of_source_exists_;
+            std::pair<double,double> end_of_source_;
+            bool chase_initialized_,lead_initialized_;
+            double amin_,front_s_buffer_;
+            adore::params::APTacticalPlanner* ptac_;
+
+          public:
+            StdEgoProgressGap(adore::view::ALane* target, adore::view::ALane* source, adore::params::APTacticalPlanner* ptac,double x_end, double y_end)
+              : target_(target), source_(source), ptac_(ptac), chase_exists_(false), lead_exists_(false), chase_initialized_(false), lead_initialized_(false)
+            {
+                end_of_source_exists_ = true;
+                end_of_source_.first = x_end;
+                end_of_source_.second = y_end;
+            }
+            virtual adore::view::AGap::EGapState getState(double s, double t) override
+            {
+                double send,nend;
+                source_->toRelativeCoordinates(end_of_source_.first,end_of_source_.second,send,nend);
+                if (s>send || s > getLeadProgress(t,s-100))
+                {
+                    return adore::view::AGap::CLOSED;
+                }
+                if (s - front_s_buffer_ * 0.5 < getChaseProgress(t, s -1.0))
+                {
+                    return adore::view::AGap::OPENING;
+                }
+                return adore::view::AGap::OPEN;
+            }
+            virtual double getLeadProgress(double t, double guard) override
+            {
+                if (lead_exists_)
+                {   
+                    double t_standstill = std::max(lead_v0_,0.0) / -amin_ + lead_t0_;
+                    t = std::min(t,t_standstill);//predict no further then until standstill
+                    return lead_s0_ + (t - lead_t0_) * lead_v0_ + 0.5 * amin_ * (t - lead_t0_) * (t - lead_t0_)-front_s_buffer_;
+                }
+                return guard;
+            }
+            virtual double getChaseProgress(double t, double guard) override
+            {
+                if (chase_exists_)
+                {
+                    double t_standstill = std::max(chase_v0_,0.0) / -amin_ + chase_t0_;
+                    t = std::min(t,t_standstill);//predict no further then until standstill
+                    return chase_s0_ + (t - chase_t0_) * chase_v0_ + 0.5 * amin_ * (t - chase_t0_) * (t - chase_t0_);
+                }
+                return guard;
+            }
+            
+            int getChaseID()
+            {
+                return chase_exists_ ? chase_id_ : -1;
+            }
+            void setChase(int id)
+            {
+                chase_initialized_ = true;
+                chase_id_ = id;
+            }
+            void setLead(int id)
+            {
+                lead_initialized_ = true;
+                lead_id_ = id;
+            }
+            void updateLead()
+            {
+                lead_exists_ = false;
+                if(!lead_initialized_)return;
+                auto olt = target_->getOnLaneTraffic();
+                for (auto& a : olt)
+                {
+                    if (a.getTrackingID() == lead_id_)
+                    {
+                        lead_exists_ = true;
+                        lead_t0_ = a.getObservationTime();
+                        lead_s0_ = a.getCurrentProgress() - 0.5 * a.getLength();
+                        lead_v0_ = a.getCurrentSpeed();
+                        lead_a0_ = a.getCurrentAcceleration();
+                    }
+                }
+            }
+           
+            void updateChase()
+            {
+                chase_exists_ = false;
+                if(!chase_initialized_)return;
+                auto olt = target_->getOnLaneTraffic();
+                for (auto& a : olt)
+                {
+                    if (a.getTrackingID() == chase_id_)
+                    {
+                        chase_exists_ = true;
+                        chase_t0_ = a.getObservationTime();
+                        chase_s0_ = a.getCurrentProgress() + 0.5 * a.getLength();
+                        chase_v0_ = a.getCurrentSpeed();
+                        chase_a0_ = a.getCurrentAcceleration();
+                        }
+                }
+            }
+            void findLeadAndChase(double x, double y, double t)
+            {
+                double s, n;
+                source_->toRelativeCoordinates(x, y, s, n);
+                auto olt = target_->getOnLaneTraffic();
+                auto a = olt.begin();
+                setLead(-1);
+                for ( ; a != olt.end(); ++a)
+                {
+                    if (a->getCurrentProgress() + (t - a->getObservationTime()) * a->getCurrentSpeed() - a->getLength() > s)
+                    {
+                        setLead(a->getTrackingID());
+                        break;
+                    }
+                }
+                // there is no lead, but there is a chase:
+                if (a == olt.end() && a != olt.begin())
+                {
+                    --a;
+                    setChase(a->getTrackingID());
+                }
+                // there is a lead and a chase
+                else if (a != olt.begin())
+                {
+                    --a;
+                    setChase(a->getTrackingID());
+                }
+                // there is no chase or no chase and no lead
+                else
+                {
+                    setChase(-1);
+                }
+            }
+            void update(double x, double y, double t)
+            {
+                amin_ = ptac_->getAssumedNominalAccelerationMinimum();
+                front_s_buffer_ = ptac_->getFrontSGap();
+                findLeadAndChase(x,y,t);
                 updateLead();
                 updateChase();
             }
