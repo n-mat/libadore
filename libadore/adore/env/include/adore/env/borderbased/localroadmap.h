@@ -52,6 +52,7 @@ namespace adore
 				BorderBased::LMSNavigation lms_navigation_;
 				adore::params::APLocalRoadMap* apLocalRoadMap_; /**< Parameters for local road map */
 				adore::params::APVehicle* apVehicle_; /**< Parameters for vehicle */
+				bool no_ego_state_update_;
 
 
 
@@ -80,6 +81,7 @@ namespace adore
 						adore::env::NavigationCost cost(datum.second);
 						borderCostMap_.emplace(datum.first, cost).first->second = cost;//create and update
 					}
+					if(!no_ego_state_update_)
 					vehicleReader_->getData(egoState_);
 				}
 				/**
@@ -112,9 +114,15 @@ namespace adore
                   vehicleReader_ = envfactory->getVehicleMotionStateReader();
                   apLocalRoadMap_ = paramsfactory->getLocalRoadMap();
                   apVehicle_ = paramsfactory->getVehicle();
+				  no_ego_state_update_ = false;
 				}
 
 				VehicleMotionState9d getEgoState(){return egoState_;}
+				void useStaticEgoVehicleState(VehicleMotionState9d i)
+				{
+					no_ego_state_update_ = true;
+					egoState_ = i;
+				}
 				/**
 				 * @brief Get the BorderSet object
 				 * 
@@ -245,6 +253,7 @@ namespace adore
 				 */
 				void updateEgoState()
 				{
+					if(!no_ego_state_update_)
 					vehicleReader_->getData(egoState_);
 				}
 

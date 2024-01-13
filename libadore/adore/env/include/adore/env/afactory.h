@@ -59,6 +59,8 @@ namespace adore
 			typedef adore::mad::AWriter<OccupancyCylinderPredictionSet> TOCPredictionSetWriter;
 			typedef adore::mad::AFeed<adore::env::BorderBased::CombinedLaneGeometry> TLaneGeometryFeed;
 			typedef adore::mad::AWriter<adore::env::BorderBased::CombinedLaneGeometry> TLaneGeometryWriter;
+			typedef adore::mad::AFeed<std::vector<std::shared_ptr<adore::env::BorderBased::LaneGeometryDataProxy>>> TLaneGeometryArrayFeed;
+			typedef adore::mad::AWriter<std::vector<std::shared_ptr<adore::env::BorderBased::LaneGeometryDataProxy>>> TLaneGeometryArrayWriter;
 			typedef adore::mad::AReader<bool> TResetLaneMatchingReader;
 			typedef adore::mad::AWriter<bool> TResetLaneMatchingWriter;
 			typedef adore::mad::AWriter<adore::env::SpeedLimit> TSpeedLimitWriter;
@@ -164,7 +166,13 @@ namespace adore
 			virtual TLaneGeometryFeed* getLaneGeometryFeed()=0;
 
 			// write lane geometry
-			virtual TLaneGeometryWriter* getLaneGeometryWriter()=0;
+			virtual TLaneGeometryWriter* getLaneGeometryWriter()=0;//
+			
+			// read lane geometry
+			virtual TLaneGeometryArrayFeed* getLaneGeometryArrayFeed()=0;
+
+			// write lane geometry
+			virtual TLaneGeometryArrayWriter* getLaneGeometryArrayWriter()=0;
 
 			// read reset signal for lane matching
 			virtual TResetLaneMatchingReader* getResetLaneMatchingReader()=0;

@@ -54,7 +54,6 @@ namespace adore
                 double indicator_right_off_from_;/** < upper time bound for setting right indicator on */
                 adoreMatrix<double,10,1> x_;
                 adore::fun::MotionCommand u_;
-                adore::mad::AReader<double>* timer_;
                 adore::mad::AReader<adore::fun::MotionCommand>* control_input_; 
                 adore::mad::AWriter<adore::fun::VehicleMotionState9d>* sim_output_; /** < publishes ego state measurement inside vehicle */
                 adore::mad::AWriter<adore::fun::VehicleMotionState9d>* gps_output_; /** < publishes ego state measurement inside vehicle */
@@ -69,6 +68,7 @@ namespace adore
             protected:          
                 adore::env::traffic::Participant::TTrackingID simulationID_;
                 adore::env::traffic::Participant::TV2XStationID v2xStationID_;
+                adore::mad::AReader<double>* timer_;
 
 
             public:
