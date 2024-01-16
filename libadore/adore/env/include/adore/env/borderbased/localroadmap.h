@@ -53,6 +53,7 @@ namespace adore
 				adore::params::APLocalRoadMap* apLocalRoadMap_; /**< Parameters for local road map */
 				adore::params::APVehicle* apVehicle_; /**< Parameters for vehicle */
 				bool no_ego_state_update_;
+				bool navigation_manually_deactivated_;
 
 
 
@@ -115,6 +116,7 @@ namespace adore
                   apLocalRoadMap_ = paramsfactory->getLocalRoadMap();
                   apVehicle_ = paramsfactory->getVehicle();
 				  no_ego_state_update_ = false;
+				  navigation_manually_deactivated_ = false;
 				}
 
 				VehicleMotionState9d getEgoState(){return egoState_;}
@@ -181,6 +183,10 @@ namespace adore
 				{
 					return &borderCostMap_;
 				}
+				void deactivateNavigation()
+				{
+					navigation_manually_deactivated_ = true;
+				}
 
 				/**
 				 * @brief transfers value of APLocalRoadMap->isNavigationActive is true
@@ -188,6 +194,10 @@ namespace adore
 				 */
 				bool isNavigationActive()
 				{
+					if(navigation_manually_deactivated_)
+					{
+						return false;
+					}
 					return apLocalRoadMap_->isNavigationActive();
 				}
 				
@@ -295,7 +305,7 @@ namespace adore
 					{
 						if( lanesNearVehicle_.size()>0 )
 						{
-							if(apLocalRoadMap_->isNavigationActive())
+							if(isNavigationActive())
 							{
 								matchedLane_ = lms_navigation_.getBestMatch(&lanesNearVehicle_,&egoState_);
 							}

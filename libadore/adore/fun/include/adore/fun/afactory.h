@@ -40,6 +40,7 @@ namespace adore
 		{
       public:
       typedef adore::mad::AReader<NavigationGoal> TNavigationGoalReader;
+      typedef adore::mad::AWriter<NavigationGoal> TNavigationGoalWriter;
       typedef adore::mad::AReader<SetPointRequest> TSetPointRequestReader;
       typedef adore::mad::AWriter<SetPointRequest> TSetPointRequestWriter;
       typedef adore::mad::AReader<VehicleMotionState9d> TMotionStateReader;
@@ -72,6 +73,7 @@ namespace adore
 		  public:
 			///get updates on the navigation goal
 			virtual TNavigationGoalReader* getNavigationGoalReader()=0;
+			virtual TNavigationGoalWriter* getNavigationGoalWriter()=0;
 			///get updates on the setpoint request
 			virtual TSetPointRequestReader* getSetPointRequestReader()=0;
 			///write updates on the setpoint request
