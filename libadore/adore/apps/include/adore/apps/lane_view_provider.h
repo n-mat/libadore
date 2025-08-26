@@ -39,7 +39,7 @@ namespace adore
         class LaneViewProvider
         {
           private:
-            adore::env::BorderBased::LaneFollowingGeometry<20, 200> lfg_; /**< object, which constructs lane following
+            adore::env::BorderBased::LaneFollowingGeometry<60, 200> lfg_; /**< object, which constructs lane following
                                                                              geometry from local road-map */
             // adore::env::BorderBased::LaneFollowingGeometry<20, 200> lfg_left_;  /**< object, which constructs lane
             //                                                                   following  geometry from local road-map */
@@ -264,6 +264,20 @@ namespace adore
 
             void copy_lfg_to_lfg_proxy(std::shared_ptr<adore::env::BorderBased::LaneGeometryDataProxy> target,
                                        adore::env::BorderBased::LaneFollowingGeometry<20, 200> const& source)
+            {
+                target->isValid = source.isValid();
+                target->centerSmoothed_fct = source.m_centerSmoothed_fct;
+                target->leftDistance_fct = source.m_leftDistance_fct;
+                target->rightDistance_fct = source.m_rightDistance_fct;
+                target->centerNormal_fct = source.m_centerNormal_fct;
+                target->centerSmoothedCurvature_fct = source.m_centerSmoothedCurvature_fct;
+                target->centerSmoothedCurvatureDerivative_fct = source.m_centerSmoothedCurvatureDerivative_fct;
+                target->navigationCost_fct = source.m_navigationCost_fct;
+
+            }
+
+            void copy_lfg_to_lfg_proxy(std::shared_ptr<adore::env::BorderBased::LaneGeometryDataProxy> target,
+                                       adore::env::BorderBased::LaneFollowingGeometry<60, 200> const& source)
             {
                 target->isValid = source.isValid();
                 target->centerSmoothed_fct = source.m_centerSmoothed_fct;
