@@ -174,9 +174,6 @@ namespace adore
 			// write lane geometry
 			virtual TLaneGeometryArrayWriter* getLaneGeometryArrayWriter()=0;
 
-			virtual TLaneGeometryArrayFeed* getLaneGeometryArrayFeed()=0;
-			virtual TLaneGeometryArrayWriter* getLaneGeometryArrayWriter()=0;
-
 			// read reset signal for lane matching
 			virtual TResetLaneMatchingReader* getResetLaneMatchingReader()=0;
 
